@@ -124,7 +124,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
   enabled             = true
   default_root_object = "index.html"
 
-  #aliases = ["www.juanvarela.com.ar"]
+  aliases = ["terraform.juanvarela.com.ar"]
 
   # AWS Managed Caching Policy (CachingDisabled)
   default_cache_behavior {
@@ -145,8 +145,16 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
   }
 
   viewer_certificate {
-    acm_certificate_arn = "arn:aws:acm:us-east-1:922166932404:certificate/c6a5f3e6-6eae-4677-a804-3649ffe12e11"
+    acm_certificate_arn = "arn:aws:acm:us-east-1:922166932404:certificate/885c587d-ba2c-4d27-ae3e-8f269c8f51e1"
     minimum_protocol_version = "TLSv1.2_2021" # Required when specifying acm_certificate_arn
     ssl_support_method = "sni-only" # Required when specifying acm_certificate_arn
   }
 }
+
+# **********************************
+# ******* CERTIFICATE MANAGER ******
+# **********************************
+
+# 1) Create public certificate. Specify domain
+# 2) Add the new certificate with the hosted zone (Route 53)
+# 3) Update acm_certificate_arn
