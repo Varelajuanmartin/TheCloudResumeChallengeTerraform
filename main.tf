@@ -3,33 +3,62 @@
 # **********************************
 
 # 1) S3Bucket: static-webpage-cv
-# P 2) Unable block public access
-# P 3) Bucket policy:
-# {
-#     "Version": "2008-10-17",
-#     "Id": "PolicyForCloudFrontPrivateContent",
-#     "Statement": [
-#         {
-#             "Sid": "AllowCloudFrontServicePrincipal",
-#             "Effect": "Allow",
-#             "Principal": {
-#                 "Service": "cloudfront.amazonaws.com"
-#             },
-#             "Action": "s3:GetObject",
-#             "Resource": "arn:aws:s3:::static-webpage-cv/*",
-#             "Condition": {
-#                 "StringEquals": {
-#                     "AWS:SourceArn": "arn:aws:cloudfront::922166932404:distribution/EC86W9VRBXPJ7"
-#                 }
-#             }
-#         }
-#     ]
-# }
-# P 4) Upload the webpage files
+# 2) Block all public access
+# 3) Upload the webpage files
+# 4) Apply Bucket Resource policy
+# 5) Object properties: ACL Disabled
 
 resource "aws_s3_bucket" "static-webpage-cv" {
   bucket = "static-webpage-cv-terraform"
 }
+
+resource "aws_s3_bucket_public_access_block" "s3_block_public_access" {
+  bucket = aws_s3_bucket.static-webpage-cv.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_object" "static_webpage" {
+  key        = "index.html" # Name uploaded in bucket
+  bucket     = aws_s3_bucket.static-webpage-cv.id
+  source     = "index.html" # Source of file in folder
+  content_type = "text/html"
+}
+
+resource "aws_s3_bucket_policy" "PolicyForCloudFrontPrivateContent" {
+  bucket = aws_s3_bucket.static-webpage-cv.id
+  policy = <<EOF
+{
+  "Version": "2008-10-17",
+  "Id": "PolicyForCloudFrontPrivateContent",
+  "Statement": [
+    {
+      "Sid": "AllowCloudFrontServicePrincipal",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "cloudfront.amazonaws.com"
+      },
+      "Action": "s3:GetObject",
+      "Resource": "${aws_s3_bucket.static-webpage-cv.arn}/*",
+      "Condition": {
+        "StringEquals": {
+            "AWS:SourceArn": "${aws_cloudfront_distribution.s3_distribution.arn}"
+        }
+      }
+    }
+  ]
+}
+EOF
+}
+
+  # The filemd5() function is available in Terraform 0.11.12 and later
+  # For Terraform 0.11.11 and earlier, use the md5() function and the file() function:
+  # etag = "${md5(file("path/to/file"))}"
+#   etag = filemd5("path/to/file")
+# }e
 
 # **********************************
 # ************ DYNAMODB ************
@@ -74,11 +103,6 @@ ITEM
 # 8) Origin Access
 # P 9) Alternate domain names: www.juanvarela.com.ar
 
-resource "aws_s3_bucket_acl" "b_acl" {
-  bucket = aws_s3_bucket.static-webpage-cv.id
-  acl    = "private"
-}
-
 locals {
   s3_origin_id = "myS3Origin"
 }
@@ -93,8 +117,8 @@ resource "aws_cloudfront_origin_access_control" "oac" {
 
 resource "aws_cloudfront_distribution" "s3_distribution" {
   origin {
-    domain_name              = aws_s3_bucket.static-webpage-cv.bucket_regional_domain_name
-    origin_id                = local.s3_origin_id
+    domain_name              = aws_s3_bucket.static-webpage-cv.bucket_regional_domain_name 
+    origin_id                = local.s3_origin_id # Origin Name
     origin_access_control_id = aws_cloudfront_origin_access_control.oac.id
   }
   enabled             = true
