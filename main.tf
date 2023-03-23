@@ -59,3 +59,70 @@ resource "aws_dynamodb_table_item" "VisitorCountItem" {
 }
 ITEM
 }
+
+# **********************************
+# *********** CLOUDFRONT ***********
+# **********************************
+
+# 1) Create Cloudfron distribution
+# 2) Origin s3 DNS
+# 3) Origin access control. Origin type s3. Ensure bucket policy
+# 4) Default root object: index.html
+# 5) Disable Cache
+# 6) Price Class: North America & Europe. PriceClass_100
+# 7) Alternate domain name & custom SSL Certificate
+# 8) Origin Access
+# P 9) Alternate domain names: www.juanvarela.com.ar
+
+resource "aws_s3_bucket_acl" "b_acl" {
+  bucket = aws_s3_bucket.static-webpage-cv.id
+  acl    = "private"
+}
+
+locals {
+  s3_origin_id = "myS3Origin"
+}
+
+resource "aws_cloudfront_origin_access_control" "oac" {
+	name                              = "oac_terraform"
+	description                       = ""
+	origin_access_control_origin_type = "s3"
+	signing_behavior                  = "always"
+	signing_protocol                  = "sigv4"
+}
+
+resource "aws_cloudfront_distribution" "s3_distribution" {
+  origin {
+    domain_name              = aws_s3_bucket.static-webpage-cv.bucket_regional_domain_name
+    origin_id                = local.s3_origin_id
+    origin_access_control_id = aws_cloudfront_origin_access_control.oac.id
+  }
+  enabled             = true
+  default_root_object = "index.html"
+
+  #aliases = ["www.juanvarela.com.ar"]
+
+  # AWS Managed Caching Policy (CachingDisabled)
+  default_cache_behavior {
+    cache_policy_id  = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # Using the CachingDisabled managed policy ID:
+    allowed_methods  = ["GET", "HEAD"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = local.s3_origin_id
+    viewer_protocol_policy = "redirect-to-https"
+  }
+
+  price_class = "PriceClass_100"
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+      locations        = []
+    }
+  }
+
+  viewer_certificate {
+    acm_certificate_arn = "arn:aws:acm:us-east-1:922166932404:certificate/c6a5f3e6-6eae-4677-a804-3649ffe12e11"
+    minimum_protocol_version = "TLSv1.2_2021" # Required when specifying acm_certificate_arn
+    ssl_support_method = "sni-only" # Required when specifying acm_certificate_arn
+  }
+}
