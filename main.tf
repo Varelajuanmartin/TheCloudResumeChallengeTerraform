@@ -212,3 +212,79 @@ resource "aws_lambda_function" "test_lambda" {
 
   runtime = "nodejs12.x"
 }
+
+# **********************************
+# *********** API GATEWAY **********
+# **********************************
+
+# 1) Create REST API Gateway VisitorCounterTerraform
+# 2) Create Resource, configure as proxy
+# 3) Create Method ANY, Authorization NONE,   Lambda function proxy
+# 4) Deploy API, stage name dev
+# 5) Allow API Gateway invoke Lambda
+
+resource "aws_api_gateway_rest_api" "VisitorCounter_RESTAPI" {
+  name = "VisitorCounterTerraform"
+}
+
+resource "aws_api_gateway_resource" "VisitorCounter_Resource" {
+  parent_id   = aws_api_gateway_rest_api.VisitorCounter_RESTAPI.root_resource_id
+  path_part   = "{proxy+}"
+  rest_api_id = aws_api_gateway_rest_api.VisitorCounter_RESTAPI.id
+}
+
+resource "aws_api_gateway_method" "VisitorCounter_Method" {
+  authorization = "NONE"
+  http_method   = "ANY"
+  resource_id   = aws_api_gateway_resource.VisitorCounter_Resource.id
+  rest_api_id   = aws_api_gateway_rest_api.VisitorCounter_RESTAPI.id
+}
+
+resource "aws_api_gateway_integration" "VisitorCounter_Integration" {
+  http_method = aws_api_gateway_method.VisitorCounter_Method.http_method
+  resource_id = aws_api_gateway_resource.VisitorCounter_Resource.id
+  rest_api_id = aws_api_gateway_rest_api.VisitorCounter_RESTAPI.id
+  
+  type        = "AWS_PROXY" #  MOCK
+  integration_http_method  = "POST" # ANY
+  uri                      = aws_lambda_function.test_lambda.invoke_arn
+}
+
+resource "aws_api_gateway_deployment" "VisitorCounter_Deployment" {
+  rest_api_id = aws_api_gateway_rest_api.VisitorCounter_RESTAPI.id
+
+  triggers = {
+    # NOTE: The configuration below will satisfy ordering considerations,
+    #       but not pick up all future REST API changes. More advanced patterns
+    #       are possible, such as using the filesha1() function against the
+    #       Terraform configuration file(s) or removing the .id references to
+    #       calculate a hash against whole resources. Be aware that using whole
+    #       resources will show a difference after the initial implementation.
+    #       It will stabilize to only change when resources change afterwards.
+    redeployment = sha1(jsonencode([
+    aws_api_gateway_resource.VisitorCounter_Resource.id,
+    aws_api_gateway_method.VisitorCounter_Method.id,
+    aws_api_gateway_integration.VisitorCounter_Integration.id,
+    ]))
+  }
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_api_gateway_stage" "VisitorCounter_Stage" {
+  deployment_id = aws_api_gateway_deployment.VisitorCounter_Deployment.id
+  rest_api_id   = aws_api_gateway_rest_api.VisitorCounter_RESTAPI.id
+  stage_name    = "devTerraform"
+}
+
+resource "aws_lambda_permission" "apigw" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.test_lambda.function_name
+  principal     = "apigateway.amazonaws.com"
+
+  # The /*/* portion grants access from any method on any resource
+  # within the API Gateway "REST API".
+  source_arn = "${aws_api_gateway_rest_api.VisitorCounter_RESTAPI.execution_arn}/*/*"
+}

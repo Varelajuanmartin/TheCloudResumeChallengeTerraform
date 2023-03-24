@@ -5,7 +5,7 @@ exports.handler = (event, context, callback) => {
     const pageName = "1";
 
     const params = {
-        TableName: 'VisitorCountTerraform', // MODIFY WITH THE NAME OF THE TABLE
+        TableName: 'VisitorCountTerraform',
         Key: {
             PageName: pageName
         },
@@ -25,13 +25,16 @@ exports.handler = (event, context, callback) => {
             errorResponse(err.message, context.awsRequestId, callback);
         } else {
             console.log(`Visitor count for page ${pageName} updated to ${data.Attributes.Count}`);
+            const responseBody = {
+                Count: data.Attributes.Count
+            };
             callback(null, {
                 statusCode: 200,
-                body: JSON.stringify({
-                    Count: data.Attributes.Count
-                }),
+                body: JSON.stringify(responseBody),
                 headers: {
                     'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Headers': 'Content-Type',
+                    'Access-Control-Allow-Methods': 'OPTIONS,POST,GET'
                 },
             });
         }
