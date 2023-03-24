@@ -54,41 +54,6 @@ resource "aws_s3_bucket_policy" "PolicyForCloudFrontPrivateContent" {
 EOF
 }
 
-  # The filemd5() function is available in Terraform 0.11.12 and later
-  # For Terraform 0.11.11 and earlier, use the md5() function and the file() function:
-  # etag = "${md5(file("path/to/file"))}"
-#   etag = filemd5("path/to/file")
-# }e
-
-# **********************************
-# ************ DYNAMODB ************
-# **********************************
-
-# 1) DynamoDB Table: VisitorCount
-# 2) On demand
-# 3) Index PageName String, Attribute Count Number
-# 4) Add an item PageName = "1", Count = "0"
-
-resource "aws_dynamodb_table" "VisitorCount" {
-  name = "VisitorCountTerraform"
-  billing_mode = "PAY_PER_REQUEST" # On demand
-  hash_key = "PageName"
-  attribute {
-    name = "PageName"
-    type = "S"
-  }
-}
-resource "aws_dynamodb_table_item" "VisitorCountItem" {
-  table_name = aws_dynamodb_table.VisitorCount.name
-  hash_key = aws_dynamodb_table.VisitorCount.hash_key
-  item = <<ITEM
-{
-  "PageName": {"S": "1"},
-  "Count": {"N": "0"}
-}
-ITEM
-}
-
 # **********************************
 # *********** CLOUDFRONT ***********
 # **********************************
@@ -158,3 +123,92 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
 # 1) Create public certificate. Specify domain
 # 2) Add the new certificate with the hosted zone (Route 53)
 # 3) Update acm_certificate_arn
+
+
+# **********************************
+# ************ DYNAMODB ************
+# **********************************
+
+# 1) DynamoDB Table: VisitorCount
+# 2) On demand
+# 3) Index PageName String, Attribute Count Number
+# 4) Add an item PageName = "1", Count = "0"
+
+resource "aws_dynamodb_table" "VisitorCount" {
+  name = "VisitorCountTerraform"
+  billing_mode = "PAY_PER_REQUEST" # On demand
+  hash_key = "PageName"
+  attribute {
+    name = "PageName"
+    type = "S"
+  }
+}
+resource "aws_dynamodb_table_item" "VisitorCountItem" {
+  table_name = aws_dynamodb_table.VisitorCount.name
+  hash_key = aws_dynamodb_table.VisitorCount.hash_key
+  item = <<ITEM
+{
+  "PageName": {"S": "1"},
+  "Count": {"N": "0"}
+}
+ITEM
+}
+
+# **********************************
+# ************ IAM ROLE ************
+# **********************************
+
+# 1) Generate a Role so Lambda can access DynamoDB Table
+
+resource "aws_iam_role" "iam_for_lambda" {
+  name = "iam_for_lambda"
+
+  assume_role_policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": "sts:AssumeRole",
+      "Principal": {
+        "Service": "lambda.amazonaws.com"
+      },
+      "Effect": "Allow",
+      "Sid": ""
+    }
+  ]
+}
+EOF
+}
+
+# Lambda Basic Exectution Role
+resource "aws_iam_role_policy_attachment" "basic_execution" {
+  role = aws_iam_role.iam_for_lambda.id
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# Lambda DynamoDB Policy
+resource "aws_iam_role_policy_attachment" "dynamodb_execution" {
+  role = aws_iam_role.iam_for_lambda.id
+  policy_arn = "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+}
+
+# **********************************
+# ************* LAMBDA *************
+# **********************************
+
+# 1) Create function VisitorCountersTerraform
+# 2) Function type Node.js 12.x
+# 3) Copy Function
+
+resource "aws_lambda_function" "test_lambda" {
+  # If the file is not in the current working directory you will need to include a
+  # path.module in the filename.
+  filename      = "lambda_function_payload.zip"
+  function_name = "VisitorCounterTerraform"
+  role          = aws_iam_role.iam_for_lambda.arn
+  handler       = "lambda_readwrite_dynamodb_CORS.handler" # Name of the .js file inside the .zip without .js
+
+  source_code_hash = filebase64sha256("lambda_function_payload.zip")
+
+  runtime = "nodejs12.x"
+}
