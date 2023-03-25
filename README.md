@@ -1,5 +1,7 @@
 # The Cloud Resume Challenge - Terraform
 
+![My Image](work2.jpg)
+
 This repo solves the challenge of The Cloud Resume Challenge by Forrest Brazeal:  https://cloudresumechallenge.dev/docs/the-challenge/aws/
 
 The Cloud Resume Challenge is a hands-on project designed to help you bridge the gap from cloud certification to cloud job. It incorporates many of the skills that real cloud and DevOps engineers use in their daily work.
